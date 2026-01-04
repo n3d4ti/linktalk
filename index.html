@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>linkTalk - AAC Communication App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom colors for Fitzgerald Key system */
+        .noun-bg { background-color: #FFD700; color: black; }
+        .verb-bg { background-color: #32CD32; color: white; }
+        .adjective-bg { background-color: #4169E1; color: white; }
+        .social-bg { background-color: #FF69B4; color: black; }
+        
+        /* High contrast and accessibility improvements */
+        .communication-button {
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            border: 3px solid transparent;
+        }
+        
+        .communication-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+            border-color: #333;
+        }
+        
+        .communication-button:active {
+            transform: scale(0.95);
+        }
+        
+        .sentence-item {
+            animation: fadeIn 0.3s ease-in;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        /* Ensure text is always readable on placeholder images */
+        .image-text-overlay {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 4px;
+            font-weight: bold;
+            text-align: center;
+            font-size: 0.875rem;
+        }
+        
+        /* Custom scrollbar for sentence bar */
+        .sentence-scroll::-webkit-scrollbar {
+            height: 8px;
+        }
+        
+        .sentence-scroll::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        
+        .sentence-scroll::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 10px;
+        }
+        
+        .sentence-scroll::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans">
+    <!-- Main Container -->
+    <div class="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50">
+        <!-- Header -->
+        <header class="bg-white shadow-lg p-4">
+            <div class="max-w-7xl mx-auto">
+                <h1 class="text-3xl font-bold text-center text-blue-600 mb-2">
+                    🗣️ linkTalk
+                </h1>
+                <p class="text-center text-gray-600 text-sm">
+                    Touch, Build, Speak - Your Voice Matters
+                </p>
+            </div>
+        </header>
+
+        <!-- Sentence Assembly Bar -->
+        <section class="bg-white shadow-md p-4 mx-4 mt-4 rounded-lg">
+            <div class="max-w-7xl mx-auto">
+                <div class="flex items-center gap-4">
+                    <!-- Sentence Display Area -->
+                    <div class="flex-1 min-h-[80px] bg-gray-50 border-2 border-gray-300 rounded-lg p-3 sentence-scroll overflow-x-auto">
+                        <div id="sentence-display" class="flex items-center gap-2 min-h-[60px]">
+                            <span class="text-gray-500 italic" id="placeholder-text">
+                                Tap words to build your sentence...
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <!-- Control Buttons -->
+                    <div class="flex flex-col gap-2">
+                        <button id="play-button" 
+                                class="bg-green-500 hover:bg-green-600 text-white p-4 rounded-lg font-bold text-lg transition-all transform hover:scale-105 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                                disabled>
+                            ▶️ PLAY
+                        </button>
+                        <button id="clear-button" 
+                                class="bg-red-500 hover:bg-red-600 text-white p-4 rounded-lg font-bold text-lg transition-all transform hover:scale-105">
+                            🗑️ CLEAR
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Sentence Text Preview -->
+                <div class="mt-3 p-2 bg-blue-50 rounded text-center">
+                    <span id="sentence-text" class="text-lg font-medium text-blue-800">
+                        <!-- Built sentence will appear here -->
+                    </span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Category Navigation -->
+        <nav class="p-4">
+            <div class="max-w-7xl mx-auto">
+                <div class="flex flex-wrap gap-2 justify-center">
+                    <button class="category-btn bg-blue-500 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-600 transition-all" 
+                            data-category="core">
+                        ⭐ Core Words
+                    </button>
+                    <button class="category-btn bg-purple-500 text-white px-6 py-3 rounded-lg font-semibold hover:bg-purple-600 transition-all" 
+                            data-category="food">
+                        🍎 Food
+                    </button>
+                    <button class="category-btn bg-orange-500 text-white px-6 py-3 rounded-lg font-semibold hover:bg-orange-600 transition-all" 
+                            data-category="activities">
+                        🎮 Activities
+                    </button>
+                    <button class="category-btn bg-pink-500 text-white px-6 py-3 rounded-lg font-semibold hover:bg-pink-600 transition-all" 
+                            data-category="feelings">
+                        😊 Feelings
+                    </button>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Communication Grid -->
+        <main class="p-4">
+            <div class="max-w-7xl mx-auto">
+                <div id="communication-grid" 
+                     class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                    <!-- Communication buttons will be dynamically generated here -->
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="bg-white shadow-lg mt-8 p-4 text-center text-gray-600">
+            <p>Designed for accessible communication • Web Speech API enabled</p>
+        </footer>
+    </div>
+
+    <script>
+        // Vocabulary Data Structure with Fitzgerald Key Color Coding
+        const vocabulary = {
+            core: [
+                // Nouns (Yellow background)
+                { id: 'i', label: 'I', category: 'core', grammaticalType: 'noun', imageURL: 'https://placehold.co/150x150/FFD700/000000?text=I' },
+                { id: 'you', label: 'you', category: 'core', grammaticalType: 'noun', imageURL: 'https://placehold.co/150x150/FFD700/000000?text=YOU' },
+                { id: 'mom', label: 'mom', category: 'core', grammaticalType: 'noun', imageURL: 'https://placehold.co/150x150/FFD700/000000?text=MOM' },
+                { id: 'dad', label: 'dad', category: 'core', grammaticalType: 'noun', imageURL: 'https://placehold.co/150x150/FFD700/000000?text=DAD' },
+                { id: 'help', label: 'help', category: 'core', grammaticalType: 'noun', imageURL: 'https://placehold.co/150x150/FFD700/000000?text=HELP' },
+                { id: 'more', label: 'more', category: 'core', grammaticalType: 'adjective', imageURL: 'https://placehold.co/150x150/4169E1/FFFFFF?text=MORE' },
+                
+                // Verbs (Green background)
+                { id: 'want', label: 'want', category: 'core', grammaticalType: 'verb', imageURL: 'https://placehold.co/150x150/32CD32/FFFFFF?text=WANT' },
+                { id: 'need', label: 'need', category: 'core', grammaticalType: 'verb', imageURL: 'https://placehold.co/150x150/32CD32/FFFFFF?text=NEED' },
+                { id: 'go', label: 'go', category: 'core', grammaticalType: 'verb', imageURL: 'https://placehold.co/150x150/32CD32/FFFFFF?text=GO' },
+                { id: 'stop', label: 'stop', category: 'core', grammaticalType: 'verb', imageURL: 'https://placehold.co/150x150/32CD32/FFFFFF?text=STOP' },
+                { id: 'like', label: 'like', category: 'core', grammaticalType: 'verb', imageURL: 'https://placehold.co/150x150/32CD32/FFFFFF?text=LIKE' },
+                { id: 'have', label: 'have', category: 'core', grammaticalType: 'verb', imageURL: 'https://placehold.co/150x150/32CD32/FFFFFF?text=HAVE' },
+                
+                // Social/Chat words (Pink background)
+                { id: 'please', label: 'please', category: 'core', grammaticalType: 'social', imageURL: 'https://placehold.co/150x150/FF69B4/000000?text=PLEASE' },
+                { id: 'thank-you', label: 'thank you', category: 'core', grammaticalType: 'social', imageURL: 'https://placehold.co/150x150/FF69B4/000000?text=THANK+YOU' },
+                { id: 'hello', label: 'hello', category: 'core', grammaticalType: 'social', imageURL: 'https://placehold.co/150x150/FF69B4/000000?text=HELLO' },
+                { id: 'bye', label: 'bye', category: 'core', grammaticalType: 'social', imageURL: 'https://placehold.co/150x150/FF69B4/000000?text=BYE' },
+                { id: 'sorry', label: 'sorry', category: 'core', grammaticalType: 'social', imageURL: 'https://placehold.co/150x150/FF69B4/000000?text=SORRY' },
+                { id: 'yes', label: 'yes', category: 'core', grammaticalType: 'social', imageURL: 'https://placehold.co/150x150/FF69B4/000000?text=YES' },
+                { id: 'no', label: 'no', category: 'core', grammaticalType: 'social', imageURL: 'https://placehold.co/150x150/FF69B4/000000?text=NO' }
+            ],
+            
+            food: [
+                // Food nouns (Yellow background)
+                { id: 'apple', label: 'apple', category: 'food', grammaticalType: 'noun', imageURL: 'https://placehold.co/150x150/FFD700/000000?text=APPLE' },
+                { id: 'banana', label: 'banana', category: 'food', grammaticalType: 'noun', imageURL: 'https://placehold.co/150x150/FFD700/000000?text=BANANA' },
+                { id: 'water', label: 'water', category: 'food', grammaticalType: 'noun', imageURL: 'https://placehold.co/150x150/FFD700/000000?text=WATER' },
+                { id: 'milk', label: 'milk', category: 'food', grammaticalType: 'noun', imageURL: 'https://placehold.co/150x150/FFD700/000000?text=MILK' },
+                { id: 'bread', label: 'bread', category: 'food', grammaticalType: 'noun', imageURL: 'https://placehold.co/150x150/FFD700/000000?text=BREAD' },
+                { id: 'cookie', label: 'cookie', category: 'food', grammaticalType: 'noun', imageURL: 'https://placehold.co/150x150/FFD700/000000?text=COOKIE' },
+                { id: 'pizza', label: 'pizza', category: 'food', grammaticalType: 'noun', imageURL: 'https://placehold.co/150x150/FFD700/000000?text=PIZZA' },
+                { id: 'juice', label: 'juice', category: 'food', grammaticalType: 'noun', imageURL: 'https://placehold.co/150x150/FFD700/000000?text=JUICE' },
+                
+                // Food verbs (Green background)
+                { id: 'eat', label: 'eat', category: 'food', grammaticalType: 'verb', imageURL: 'https://placehold.co/150x150/32CD32/FFFFFF?text=EAT' },
+                { id: 'drink', label: 'drink', category: 'food', grammaticalType: 'verb', imageURL: 'https://placehold.co/150x150/32CD32/FFFFFF?text=DRINK' },
+                { id: 'taste', label: 'taste', category: 'food', grammaticalType: 'verb', imageURL: 'https://placehold.co/150x150/32CD32/FFFFFF?text=TASTE' },
+                { id: 'cook', label: 'cook', category: 'food', grammaticalType: 'verb', imageURL: 'https://placehold.co/150x150/32CD32/FFFFFF?text=COOK' },
+                
+                // Food adjectives (Blue background)
+                { id: 'hungry', label: 'hungry', category: 'food', grammaticalType: 'adjective', imageURL: 'https://placehold.co/150x150/4169E1/FFFFFF?text=HUNGRY' },
+                { id: 'thirsty', label: 'thirsty', category: 'food', grammaticalType: 'adjective', imageURL: 'https://placehold.co/150x150/4169E1/FFFFFF?text=THIRSTY' },
+                { id: 'yummy', label: 'yummy', category: 'food', grammaticalType: 'adjective', imageURL: 'https://placehold.co/150x150/4169E1/FFFFFF?text=YUMMY' },
+                { id: 'hot', label: 'hot', category: 'food', grammaticalType: 'adjective', imageURL: 'https://placehold.co/150x150/4169E1/FFFFFF?text=HOT' },
+                { id: 'cold', label: 'cold', category: 'food', grammaticalType: 'adjective', imageURL: 'https://placehold.co/150x150/4169E1/FFFFFF?text=COLD' }
+            ],
+            
+            activities: [
+                // Activity nouns (Yellow background)
+                { id: 'book', label: 'book', category: 'activities', grammaticalType: 'noun', imageURL: 'https://placehold.co/150x150/FFD700/000000?text=BOOK' },
+                { id: 'toy', label: 'toy', category: 'activities', grammaticalType: 'noun', imageURL: 'https://placehold.co/150x150/FFD700/000000?text=TOY' },
+                { id: 'game', label: 'game', category: 'activities', grammaticalType: 'noun', imageURL: 'https://placehold.co/150x150/FFD700/000000?text=GAME' },
+                { id: 'music', label: 'music', category: 'activities', grammaticalType: 'noun', imageURL: 'https://placehold.co/150x150/FFD700/000000?text=MUSIC' },
+                { id: 'movie', label: 'movie', category: 'activities', grammaticalType: 'noun', imageURL: 'https://placehold.co/150x150/FFD700/000000?text=MOVIE' },
+                { id: 'park', label: 'park', category: 'activities', grammaticalType: 'noun', imageURL: 'https://placehold.co/150x150/FFD700/000000?text=PARK' },
+                
+                // Activity verbs (Green background)
+                { id: 'play', label: 'play', category: 'activities', grammaticalType: 'verb', imageURL: 'https://placehold.co/150x150/32CD32/FFFFFF?text=PLAY' },
+                { id: 'read', label: 'read', category: 'activities', grammaticalType: 'verb', imageURL: 'https://placehold.co/150x150/32CD32/FFFFFF?text=READ' },
+                { id: 'watch', label: 'watch', category: 'activities', grammaticalType: 'verb', imageURL: 'https://placehold.co/150x150/32CD32/FFFFFF?text=WATCH' },
+                { id: 'listen', label: 'listen', category: 'activities', grammaticalType: 'verb', imageURL: 'https://placehold.co/150x150/32CD32/FFFFFF?text=LISTEN' },
+                { id: 'run', label: 'run', category: 'activities', grammaticalType: 'verb', imageURL: 'https://placehold.co/150x150/32CD32/FFFFFF?text=RUN' },
+                { id: 'jump', label: 'jump', category: 'activities', grammaticalType: 'verb', imageURL: 'https://placehold.co/150x150/32CD32/FFFFFF?text=JUMP' },
+                { id: 'sing', label: 'sing', category: 'activities', grammaticalType: 'verb', imageURL: 'https://placehold.co/150x150/32CD32/FFFFFF?text=SING' },
+                { id: 'dance', label: 'dance', category: 'activities', grammaticalType: 'verb', imageURL: 'https://placehold.co/150x150/32CD32/FFFFFF?text=DANCE' },
+                
+                // Activity adjectives (Blue background)
+                { id: 'fun', label: 'fun', category: 'activities', grammaticalType: 'adjective', imageURL: 'https://placehold.co/150x150/4169E1/FFFFFF?text=FUN' },
+                { id: 'boring', label: 'boring', category: 'activities', grammaticalType: 'adjective', imageURL: 'https://placehold.co/150x150/4169E1/FFFFFF?text=BORING' },
+                { id: 'fast', label: 'fast', category: 'activities', grammaticalType: 'adjective', imageURL: 'https://placehold.co/150x150/4169E1/FFFFFF?text=FAST' },
+                { id: 'slow', label: 'slow', category: 'activities', grammaticalType: 'adjective', imageURL: 'https://placehold.co/150x150/4169E1/FFFFFF?text=SLOW' }
+            ],
+            
+            feelings: [
+                // Feeling adjectives (Blue background)
+                { id: 'happy', label: 'happy', category: 'feelings', grammaticalType: 'adjective', imageURL: 'https://placehold.co/150x150/4169E1/FFFFFF?text=HAPPY' },
+                { id: 'sad', label: 'sad', category: 'feelings', grammaticalType: 'adjective', imageURL: 'https://placehold.co/150x150/4169E1/FFFFFF?text=SAD' },
+                { id: 'angry', label: 'angry', category: 'feelings', grammaticalType: 'adjective', imageURL: 'https://placehold.co/150x150/4169E1/FFFFFF?text=ANGRY' },
+                { id: 'scared', label: 'scared', category: 'feelings', grammaticalType: 'adjective', imageURL: 'https://placehold.co/150x150/4169E1/FFFFFF?text=SCARED' },
+                { id: 'excited', label: 'excited', category: 'feelings', grammaticalType: 'adjective', imageURL: 'https://placehold.co/150x150/4169E1/FFFFFF?text=EXCITED' },
+                { id: 'tired', label: 'tired', category: 'feelings', grammaticalType: 'adjective', imageURL: 'https://placehold.co/150x150/4169E1/FFFFFF?text=TIRED' },
+                { id: 'sick', label: 'sick', category: 'feelings', grammaticalType: 'adjective', imageURL: 'https://placehold.co/150x150/4169E1/FFFFFF?text=SICK' },
+                { id: 'good', label: 'good', category: 'feelings', grammaticalType: 'adjective', imageURL: 'https://placehold.co/150x150/4169E1/FFFFFF?text=GOOD' },
+                { id: 'bad', label: 'bad', category: 'feelings', grammaticalType: 'adjective', imageURL: 'https://placehold.co/150x150/4169E1/FFFFFF?text=BAD' },
+                
+                // Feeling verbs (Green background)
+                { id: 'feel', label: 'feel', category: 'feelings', grammaticalType: 'verb', imageURL: 'https://placehold.co/150x150/32CD32/FFFFFF?text=FEEL' },
+                { id: 'love', label: 'love', category: 'feelings', grammaticalType: 'verb', imageURL: 'https://placehold.co/150x150/32CD32/FFFFFF?text=LOVE' },
+                { id: 'hate', label: 'hate', category: 'feelings', grammaticalType: 'verb', imageURL: 'https://placehold.co/150x150/32CD32/FFFFFF?text=HATE' },
+                { id: 'worry', label: 'worry', category: 'feelings', grammaticalType: 'verb', imageURL: 'https://placehold.co/150x150/32CD32/FFFFFF?text=WORRY' },
+                
+                // Social expressions for feelings (Pink background)
+                { id: 'help-me', label: 'help me', category: 'feelings', grammaticalType: 'social', imageURL: 'https://placehold.co/150x150/FF69B4/000000?text=HELP+ME' },
+                { id: 'hug', label: 'hug', category: 'feelings', grammaticalType: 'social', imageURL: 'https://placehold.co/150x150/FF69B4/000000?text=HUG' },
+                { id: 'comfort', label: 'comfort', category: 'feelings', grammaticalType: 'social', imageURL: 'https://placehold.co/150x150/FF69B4/000000?text=COMFORT' }
+            ]
+        };
+
+        // Application State
+        let currentCategory = 'core';
+        let sentence = [];
+        let speechSynthesis = window.speechSynthesis;
+
+        // DOM Elements
+        const sentenceDisplay = document.getElementById('sentence-display');
+        const sentenceText = document.getElementById('sentence-text');
+        const placeholderText = document.getElementById('placeholder-text');
+        const playButton = document.getElementById('play-button');
+        const clearButton = document.getElementById('clear-button');
+        const communicationGrid = document.getElementById('communication-grid');
+        const categoryButtons = document.querySelectorAll('.category-btn');
+
+        // Initialize the application
+        function init() {
+            setupEventListeners();
+            loadCategory('core');
+            updateSentenceDisplay();
+        }
+
+        // Event Listeners
+        function setupEventListeners() {
+            // Category navigation
+            categoryButtons.forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const category = e.target.dataset.category;
+                    loadCategory(category);
+                    updateActiveCategory(btn);
+                });
+            });
+
+            // Control buttons
+            playButton.addEventListener('click', speakSentence);
+            clearButton.addEventListener('click', clearSentence);
+
+            // Keyboard support
+            document.addEventListener('keydown', handleKeyboard);
+        }
+
+        // Load vocabulary for a specific category
+        function loadCategory(category) {
+            currentCategory = category;
+            const words = vocabulary[category] || [];
+            
+            communicationGrid.innerHTML = '';
+            
+            words.forEach(word => {
+                const button = createCommunicationButton(word);
+                communicationGrid.appendChild(button);
+            });
+        }
+
+        // Create a communication button
+        function createCommunicationButton(word) {
+            const button = document.createElement('button');
+            button.className = `communication-button w-full aspect-square rounded-lg shadow-lg flex flex-col items-center justify-center text-center p-2 ${getGrammaticalTypeClass(word.grammaticalType)} focus:outline-none focus:ring-4 focus:ring-blue-300`;
+            
+            button.innerHTML = `
+                <div class="relative w-full h-24 mb-2 rounded overflow-hidden">
+                    <img src="${word.imageURL}" 
+                         alt="${word.label}" 
+                         class="w-full h-full object-cover"
+                         loading="lazy">
+                </div>
+                <span class="font-bold text-sm uppercase tracking-wide">
+                    ${word.label}
+                </span>
+            `;
+            
+            // Single click: speak individual word and add to sentence
+            button.addEventListener('click', () => {
+                speakWord(word.label);
+                addToSentence(word);
+            });
+            
+            return button;
+        }
+
+        // Get CSS class for grammatical type (Fitzgerald Key)
+        function getGrammaticalTypeClass(type) {
+            switch(type) {
+                case 'noun': return 'noun-bg';
+                case 'verb': return 'verb-bg';
+                case 'adjective': return 'adjective-bg';
+                case 'social': return 'social-bg';
+                default: return 'bg-gray-200 text-gray-800';
+            }
+        }
+
+        // Add word to sentence
+        function addToSentence(word) {
+            sentence.push(word);
+            updateSentenceDisplay();
+        }
+
+        // Update sentence display
+        function updateSentenceDisplay() {
+            if (sentence.length === 0) {
+                sentenceDisplay.innerHTML = '<span class="text-gray-500 italic" id="placeholder-text">Tap words to build your sentence...</span>';
+                sentenceText.textContent = '';
+                playButton.disabled = true;
+            } else {
+                // Hide placeholder text
+                const placeholder = document.getElementById('placeholder-text');
+                if (placeholder) {
+                    placeholder.style.display = 'none';
+                }
+                
+                // Create sentence items
+                sentenceDisplay.innerHTML = sentence.map((word, index) => `
+                    <div class="sentence-item flex flex-col items-center p-2 bg-white rounded-lg shadow-sm border-2 ${getGrammaticalTypeClass(word.grammaticalType)} min-w-[80px]">
+                        <img src="${word.imageURL}" 
+                             alt="${word.label}" 
+                             class="w-12 h-12 object-cover rounded mb-1">
+                        <span class="text-xs font-semibold text-center">${word.label}</span>
+                        <button class="remove-word mt-1 text-red-500 hover:text-red-700 text-xs" 
+                                onclick="removeFromSentence(${index})" 
+                                title="Remove word">
+                            ✕
+                        </button>
+                    </div>
+                `).join('');
+                
+                // Update sentence text
+                const sentenceString = sentence.map(word => word.label).join(' ');
+                sentenceText.textContent = sentenceString;
+                playButton.disabled = false;
+            }
+        }
+
+        // Remove word from sentence
+        function removeFromSentence(index) {
+            sentence.splice(index, 1);
+            updateSentenceDisplay();
+        }
+
+        // Clear entire sentence
+        function clearSentence() {
+            sentence = [];
+            updateSentenceDisplay();
+        }
+
+        // Text-to-Speech functionality
+        function speakWord(text) {
+            if ('speechSynthesis' in window) {
+                // Cancel any ongoing speech
+                speechSynthesis.cancel();
+                
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.rate = 0.8;
+                utterance.pitch = 1.1;
+                utterance.volume = 1.0;
+                
+                speechSynthesis.speak(utterance);
+            } else {
+                console.warn('Speech synthesis not supported');
+                alert('Speech synthesis is not supported in your browser.');
+            }
+        }
+
+        // Speak entire sentence
+        function speakSentence() {
+            if (sentence.length === 0) return;
+            
+            const sentenceString = sentence.map(word => word.label).join(' ');
+            speakWord(sentenceString);
+        }
+
+        // Update active category button
+        function updateActiveCategory(activeBtn) {
+            categoryButtons.forEach(btn => {
+                btn.classList.remove('bg-blue-700', 'bg-purple-700', 'bg-orange-700', 'bg-pink-700');
+                btn.classList.add('bg-blue-500', 'bg-purple-500', 'bg-orange-500', 'bg-pink-500');
+            });
+            
+            const category = activeBtn.dataset.category;
+            switch(category) {
+                case 'core':
+                    activeBtn.classList.remove('bg-blue-500');
+                    activeBtn.classList.add('bg-blue-700');
+                    break;
+                case 'food':
+                    activeBtn.classList.remove('bg-purple-500');
+                    activeBtn.classList.add('bg-purple-700');
+                    break;
+                case 'activities':
+                    activeBtn.classList.remove('bg-orange-500');
+                    activeBtn.classList.add('bg-orange-700');
+                    break;
+                case 'feelings':
+                    activeBtn.classList.remove('bg-pink-500');
+                    activeBtn.classList.add('bg-pink-700');
+                    break;
+            }
+        }
+
+        // Keyboard support
+        function handleKeyboard(e) {
+            switch(e.key) {
+                case 'Enter':
+                case ' ':
+                    if (!playButton.disabled) {
+                        e.preventDefault();
+                        speakSentence();
+                    }
+                    break;
+                case 'Escape':
+                case 'Delete':
+                case 'Backspace':
+                    e.preventDefault();
+                    if (e.shiftKey) {
+                        clearSentence();
+                    } else if (sentence.length > 0) {
+                        removeFromSentence(sentence.length - 1);
+                    }
+                    break;
+                case '1':
+                    loadCategory('core');
+                    break;
+                case '2':
+                    loadCategory('food');
+                    break;
+                case '3':
+                    loadCategory('activities');
+                    break;
+                case '4':
+                    loadCategory('feelings');
+                    break;
+            }
+        }
+
+        // Make removeFromSentence globally available
+        window.removeFromSentence = removeFromSentence;
+
+        // Start the application
+        document.addEventListener('DOMContentLoaded', init);
+
+        // Handle speech synthesis voice loading
+        if ('speechSynthesis' in window) {
+            // Ensure voices are loaded
+            speechSynthesis.onvoiceschanged = function() {
+                // Voices are now available
+                console.log('Speech synthesis voices loaded');
+            };
+        }
+    </script>
+</body>
+</html>
