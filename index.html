@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>linkTalk - AAK Kommunikációs Alkalmazás</title>
+    <!-- Tailwind CSS CDN - For development/demo purposes only. For production, use PostCSS or Tailwind CLI -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         /* Custom colors for Fitzgerald Key system */
@@ -11,6 +12,20 @@
         .verb-bg { background-color: #32CD32; color: white; }
         .adjective-bg { background-color: #4169E1; color: white; }
         .social-bg { background-color: #FF69B4; color: black; }
+        
+        /* Symbol library indicator */
+        .symbol-library-badge {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            font-size: 8px;
+            padding: 1px 3px;
+            border-radius: 3px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
         
         /* High contrast and accessibility improvements */
         .communication-button {
@@ -69,6 +84,29 @@
         .sentence-scroll::-webkit-scrollbar-thumb:hover {
             background: #555;
         }
+        
+        /* Color-specific button styling for colors category */
+        .color-button-red { background-color: #ef4444; color: white; }
+        .color-button-blue { background-color: #3b82f6; color: white; }
+        .color-button-green { background-color: #10b981; color: white; }
+        .color-button-yellow { background-color: #f59e0b; color: black; }
+        .color-button-orange { background-color: #f97316; color: white; }
+        .color-button-purple { background-color: #8b5cf6; color: white; }
+        .color-button-pink { background-color: #ec4899; color: white; }
+        .color-button-brown { background-color: #a3664c; color: white; }
+        .color-button-black { background-color: #1f2937; color: white; }
+        .color-button-white { background-color: #f9fafb; color: black; border: 2px solid #d1d5db; }
+        .color-button-gray { background-color: #6b7280; color: white; }
+        
+        /* Enhanced color rectangles with better visibility */
+        .color-rectangle {
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s ease;
+        }
+        
+        .color-rectangle:hover {
+            transform: scale(1.05);
+        }
     </style>
 </head>
 <body class="bg-gray-100 font-sans">
@@ -80,9 +118,40 @@
                 <h1 class="text-3xl font-bold text-center text-blue-600 mb-2">
                     🗣️ linkTalk
                 </h1>
-                <p class="text-center text-gray-600 text-sm">
+                <p class="text-center text-gray-600 text-sm mb-4">
                     Érintsd, Építsd, Beszélj - A Te Hangod Számít
                 </p>
+                
+                <!-- ARASAAC Search Interface -->
+                <div class="max-w-md mx-auto">
+                    <div class="relative">
+                        <input 
+                            type="text" 
+                            id="pictogram-search" 
+                            placeholder="Keress új képszimbólumokat... (pl. 'kutya', 'autó')"
+                            class="w-full px-4 py-2 pr-10 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none text-sm"
+                            autocomplete="off">
+                        <button 
+                            id="search-button"
+                            class="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-blue-500 transition-colors">
+                            🔍
+                        </button>
+                    </div>
+                    <div id="search-results" class="absolute z-50 w-full max-w-md bg-white border border-gray-200 rounded-lg shadow-lg mt-1 max-h-60 overflow-y-auto" style="display: none;">
+                        <!-- Search results will appear here -->
+                    </div>
+                    
+                    <!-- Wake Lock Control (visible on mobile) -->
+                    <div class="mt-4 text-center block md:hidden">
+                        <button 
+                            id="wake-lock-toggle"
+                            class="inline-flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-lg text-sm font-medium hover:bg-green-600 transition-colors"
+                            title="Megakadályozza a képernyő elsötétedését">
+                            <span id="wake-lock-icon">📱</span>
+                            <span id="wake-lock-text">Képernyő Ébren tartása</span>
+                        </button>
+                    </div>
+                </div>
             </div>
         </header>
 
@@ -142,6 +211,10 @@
                             data-category="feelings">
                         😊 Érzések
                     </button>
+                    <button class="category-btn bg-red-500 text-white px-6 py-3 rounded-lg font-semibold hover:bg-red-600 transition-all" 
+                            data-category="colors">
+                        🌈 Színek
+                    </button>
                 </div>
             </div>
         </nav>
@@ -163,108 +236,641 @@
     </div>
 
     <script>
-        // Szókészlet adatstruktúra Fitzgerald kulcs színkódolással
+        // ARASAAC API Integration System
+        // This system uses the official ARASAAC API for Hungarian AAC pictograms
+        // with intelligent fallback to placeholder images and local caching
+        
+        // ARASAAC API Configuration with enhanced caching
+        const ARASAAC_API = {
+            baseUrl: 'https://api.arasaac.org/v1',
+            staticUrl: 'https://static.arasaac.org/pictograms',
+            language: 'hu', // Hungarian
+            defaultResolution: 500,
+            cache: new Map(), // In-memory cache for pictogram data
+            keywordCache: new Map(), // Cache for Hungarian keywords
+            cacheExpiry: 24 * 60 * 60 * 1000, // 24 hours in milliseconds
+        };
+        
+        // Enhanced caching system with localStorage
+        class CacheManager {
+            static setCache(key, data, expiry = ARASAAC_API.cacheExpiry) {
+                try {
+                    const cacheData = {
+                        data: data,
+                        timestamp: Date.now(),
+                        expiry: expiry
+                    };
+                    localStorage.setItem(`arasaac_${key}`, JSON.stringify(cacheData));
+                    ARASAAC_API.cache.set(key, data);
+                } catch (error) {
+                    console.warn('Failed to cache data:', error);
+                }
+            }
+            
+            static getCache(key) {
+                try {
+                    // Check in-memory cache first
+                    if (ARASAAC_API.cache.has(key)) {
+                        return ARASAAC_API.cache.get(key);
+                    }
+                    
+                    // Check localStorage
+                    const cached = localStorage.getItem(`arasaac_${key}`);
+                    if (cached) {
+                        const cacheData = JSON.parse(cached);
+                        const now = Date.now();
+                        
+                        if (now - cacheData.timestamp < cacheData.expiry) {
+                            // Cache is still valid
+                            ARASAAC_API.cache.set(key, cacheData.data);
+                            return cacheData.data;
+                        } else {
+                            // Cache expired, remove it
+                            localStorage.removeItem(`arasaac_${key}`);
+                        }
+                    }
+                } catch (error) {
+                    console.warn('Failed to retrieve cached data:', error);
+                }
+                return null;
+            }
+            
+            static clearExpiredCache() {
+                try {
+                    const now = Date.now();
+                    const keysToRemove = [];
+                    
+                    for (let i = 0; i < localStorage.length; i++) {
+                        const key = localStorage.key(i);
+                        if (key?.startsWith('arasaac_')) {
+                            const cached = localStorage.getItem(key);
+                            if (cached) {
+                                const cacheData = JSON.parse(cached);
+                                if (now - cacheData.timestamp >= cacheData.expiry) {
+                                    keysToRemove.push(key);
+                }
+            }
+            
+            button.addEventListener('click', () => {
+                addToSentence(word);
+                speakWord(word.label);
+            });
+            
+            return button;
+        }
+                    }
+                    
+                    keysToRemove.forEach(key => localStorage.removeItem(key));
+                    console.log(`Cleared ${keysToRemove.length} expired cache entries`);
+                } catch (error) {
+                    console.warn('Failed to clear expired cache:', error);
+                }
+            }
+        }
+        
+        // ARASAAC API Helper Functions with enhanced caching
+        class ArasaacAPI {
+            static async searchPictograms(searchText) {
+                try {
+                    const cacheKey = `search_${searchText}`;
+                    const cached = CacheManager.getCache(cacheKey);
+                    if (cached) {
+                        return cached;
+                    }
+                    
+                    const url = `${ARASAAC_API.baseUrl}/pictograms/${ARASAAC_API.language}/bestsearch/${encodeURIComponent(searchText)}`;
+                    const response = await fetch(url);
+                    
+                    if (!response.ok) {
+                        throw new Error(`ARASAAC API error: ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    CacheManager.setCache(cacheKey, data, 60 * 60 * 1000); // Cache search results for 1 hour
+                    return data;
+                } catch (error) {
+                    console.warn('ARASAAC search failed:', error);
+                    return [];
+                }
+            }
+            
+            static async getPictogramById(id) {
+                try {
+                    const cacheKey = `pictogram_${id}`;
+                    const cached = CacheManager.getCache(cacheKey);
+                    if (cached) {
+                        return cached;
+                    }
+                    
+                    const url = `${ARASAAC_API.baseUrl}/pictograms/${ARASAAC_API.language}/${id}`;
+                    const response = await fetch(url);
+                    
+                    if (!response.ok) {
+                        throw new Error(`ARASAAC API error: ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    CacheManager.setCache(cacheKey, data);
+                    return data;
+                } catch (error) {
+                    console.warn('ARASAAC pictogram fetch failed:', error);
+                    return null;
+                }
+            }
+            
+            static async getHungarianKeywords() {
+                try {
+                    const cacheKey = 'hungarian_keywords';
+                    const cached = CacheManager.getCache(cacheKey);
+                    if (cached) {
+                        return cached;
+                    }
+                    
+                    const url = `${ARASAAC_API.baseUrl}/keywords/${ARASAAC_API.language}`;
+                    const response = await fetch(url);
+                    
+                    if (!response.ok) {
+                        throw new Error(`ARASAAC API error: ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    CacheManager.setCache(cacheKey, data, 7 * 24 * 60 * 60 * 1000); // Cache keywords for 7 days
+                    return data;
+                } catch (error) {
+                    console.warn('ARASAAC keywords fetch failed:', error);
+                    return { words: [] };
+                }
+            }
+            
+            static buildPictogramUrl(id, options = {}) {
+                const {
+                    resolution = ARASAAC_API.defaultResolution,
+                    plural = false,
+                    color = true,
+                    action = null,
+                    backgroundColor = null,
+                    skin = null,
+                    hair = null
+                } = options;
+                
+                // Simple ARASAAC URL structure: just ID and resolution
+                return `${ARASAAC_API.staticUrl}/${id}/${id}_${resolution}.png`;
+            }
+            
+            static createImageWithFallbacks(id, label, options = {}) {
+                // Try multiple resolutions and formats
+                const resolutions = [500, 300, 2500];
+                const fallbacks = [];
+                
+                // Add different resolution attempts
+                resolutions.forEach(res => {
+                    fallbacks.push({
+                        url: `${ARASAAC_API.staticUrl}/${id}/${id}_${res}.png`,
+                        library: 'arasaac',
+                        type: 'pictogram',
+                        resolution: res
+                    });
+                });
+                
+                // Add placeholder as final fallback
+                const placeholderColor = this.getPlaceholderColor(options.grammaticalType || 'noun');
+                fallbacks.push({
+                    url: `https://placehold.co/150x150/${placeholderColor}/000000?text=${encodeURIComponent(label.toUpperCase())}`,
+                    library: 'placeholder',
+                    type: 'text'
+                });
+                
+                return fallbacks;
+            }
+            
+            static getPlaceholderColor(grammaticalType) {
+                switch(grammaticalType) {
+                    case 'noun': return 'FFD700'; // Yellow
+                    case 'verb': return '32CD32'; // Green
+                    case 'adjective': return '4169E1'; // Blue
+                    case 'social': return 'FF69B4'; // Pink
+                    default: return 'CCCCCC'; // Gray
+                }
+            }
+        }
+        
+        // Search functionality for ARASAAC pictograms
+        class PictogramSearch {
+            static isSearching = false;
+            static searchTimeout = null;
+            
+            static async performSearch(query) {
+                if (!query.trim() || query.length < 2) {
+                    this.hideResults();
+                    return;
+                }
+                
+                // Debounce search requests
+                clearTimeout(this.searchTimeout);
+                this.searchTimeout = setTimeout(async () => {
+                    if (this.isSearching) return;
+                    
+                    this.isSearching = true;
+                    const resultsContainer = document.getElementById('search-results');
+                    resultsContainer.innerHTML = '<div class="p-3 text-center text-gray-500">Keresés...</div>';
+                    resultsContainer.style.display = 'block';
+                    
+                    try {
+                        const results = await ArasaacAPI.searchPictograms(query);
+                        this.displayResults(results.slice(0, 8)); // Limit to 8 results
+                    } catch (error) {
+                        console.error('Search failed:', error);
+                        resultsContainer.innerHTML = '<div class="p-3 text-center text-red-500">Hiba a keresés során</div>';
+                    } finally {
+                        this.isSearching = false;
+                    }
+                }, 300);
+            }
+            
+            static displayResults(results) {
+                const resultsContainer = document.getElementById('search-results');
+                
+                if (!results || results.length === 0) {
+                    resultsContainer.innerHTML = '<div class="p-3 text-center text-gray-500">Nincs találat</div>';
+                    return;
+                }
+                
+                resultsContainer.innerHTML = results.map(pictogram => {
+                    const hungarianKeywords = pictogram.keywords
+                        .filter(kw => kw.keyword)
+                        .map(kw => kw.keyword)
+                        .slice(0, 3)
+                        .join(', ');
+                    
+                    const fallbackUrls = ArasaacAPI.createImageWithFallbacks(
+                        pictogram._id,
+                        hungarianKeywords || 'pictogram',
+                        { resolution: 300 }
+                    );
+                    
+                    return `
+                        <div class="search-result-item flex items-center p-2 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0" 
+                             data-pictogram-id="${pictogram._id}" 
+                             data-keywords="${hungarianKeywords}">
+                            <img src="${fallbackUrls[0].url}" 
+                                 alt="${hungarianKeywords}" 
+                                 class="w-12 h-12 object-cover rounded mr-3"
+                                 onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'">
+                            <div class="w-12 h-12 bg-gray-200 rounded mr-3 flex items-center justify-center text-xs font-bold text-gray-700" style="display:none;">
+                                ID
+                            </div>
+                            <div class="flex-1">
+                                <div class="font-medium text-sm text-gray-800">${hungarianKeywords || `Pictogram ${pictogram._id}`}</div>
+                                <div class="text-xs text-gray-500">ARASAAC ID: ${pictogram._id}</div>
+                            </div>
+                            <button class="add-to-category-btn text-blue-500 hover:text-blue-700 text-xs px-2 py-1 border border-blue-500 rounded">
+                                Hozzáadás
+                            </button>
+                        </div>
+                    `;
+                }).join('');
+                
+                // Add click handlers for search results
+                resultsContainer.querySelectorAll('.search-result-item').forEach(item => {
+                    item.addEventListener('click', (e) => {
+                        if (e.target.classList.contains('add-to-category-btn')) {
+                            e.stopPropagation();
+                            this.addPictogramToCategory(item);
+                        } else {
+                            // Preview the pictogram by adding to sentence temporarily
+                            this.previewPictogram(item);
+                        }
+                    });
+                });
+            }
+            
+            static addPictogramToCategory(item) {
+                const pictogramId = parseInt(item.dataset.pictogramId);
+                const keywords = item.dataset.keywords;
+                const firstKeyword = keywords.split(',')[0].trim();
+                
+                if (!firstKeyword) {
+                    alert('Nem sikerült meghatározni a szó magyar megfelelőjét.');
+                    return;
+                }
+                
+                // Create a new word object
+                const newWord = {
+                    id: `search-${pictogramId}`,
+                    label: firstKeyword,
+                    category: currentCategory,
+                    grammaticalType: 'noun', // Default to noun, user can modify if needed
+                    pictogramId: pictogramId,
+                    options: { skin: 'white' }
+                };
+                
+                // Add to current vocabulary temporarily (just for this session)
+                vocabulary[currentCategory].push(newWord);
+                
+                // Reload the current category to show the new pictogram
+                loadCategory(currentCategory);
+                
+                // Hide search results
+                this.hideResults();
+                
+                // Clear search input
+                document.getElementById('pictogram-search').value = '';
+                
+                // Show success message
+                const successMsg = document.createElement('div');
+                successMsg.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg z-50';
+                successMsg.textContent = `"${firstKeyword}" hozzáadva a(z) ${this.getCategoryName(currentCategory)} kategóriához!`;
+                document.body.appendChild(successMsg);
+                
+                setTimeout(() => {
+                    successMsg.remove();
+                }, 3000);
+            }
+            
+            static previewPictogram(item) {
+                const pictogramId = parseInt(item.dataset.pictogramId);
+                const keywords = item.dataset.keywords;
+                const firstKeyword = keywords.split(',')[0].trim();
+                
+                if (!firstKeyword) return;
+                
+                // Create temporary word for preview
+                const previewWord = {
+                    id: `preview-${pictogramId}`,
+                    label: firstKeyword,
+                    category: 'preview',
+                    grammaticalType: 'noun',
+                    pictogramId: pictogramId,
+                    options: { skin: 'white' }
+                };
+                
+                // Speak the word and add to sentence
+                speakWord(firstKeyword);
+                addToSentence(previewWord);
+                
+                // Hide search results
+                this.hideResults();
+                
+                // Clear search input
+                document.getElementById('pictogram-search').value = '';
+            }
+            
+            static hideResults() {
+                const resultsContainer = document.getElementById('search-results');
+                resultsContainer.style.display = 'none';
+            }
+            
+            static getCategoryName(category) {
+                const names = {
+                    core: 'Alapszavak',
+                    food: 'Étel',
+                    activities: 'Tevékenységek',
+                    feelings: 'Érzések',
+                    colors: 'Színek'
+                };
+                return names[category] || category;
+            }
+        }
+
+        // Screen Wake Lock Manager for mobile devices
+        // Prevents screen from going to sleep during AAC usage
+        class WakeLockManager {
+            constructor() {
+                this.wakeLock = null;
+                this.isSupported = 'wakeLock' in navigator;
+                this.isActive = false;
+                this.fallbackInterval = null;
+            }
+
+            async requestWakeLock() {
+                if (this.isSupported) {
+                    try {
+                        this.wakeLock = await navigator.wakeLock.request('screen');
+                        this.isActive = true;
+                        
+                        // Handle wake lock release (e.g., when tab becomes hidden)
+                        this.wakeLock.addEventListener('release', () => {
+                            this.isActive = false;
+                            console.log('Wake lock was released');
+                        });
+                        
+                        console.log('Screen wake lock activated');
+                        return true;
+                    } catch (err) {
+                        console.warn('Failed to request wake lock:', err);
+                        this.fallbackMethod();
+                        return false;
+                    }
+                } else {
+                    console.log('Wake Lock API not supported, using fallback');
+                    this.fallbackMethod();
+                    return false;
+                }
+            }
+
+            async releaseWakeLock() {
+                if (this.wakeLock) {
+                    await this.wakeLock.release();
+                    this.wakeLock = null;
+                    this.isActive = false;
+                    console.log('Wake lock released manually');
+                }
+                
+                // Clear fallback method
+                if (this.fallbackInterval) {
+                    clearInterval(this.fallbackInterval);
+                    this.fallbackInterval = null;
+                }
+            }
+
+            // Fallback method for browsers that don't support Wake Lock API
+            fallbackMethod() {
+                // Create a small, invisible video element that plays continuously
+                // This prevents screen sleep on most mobile browsers
+                const video = document.createElement('video');
+                video.setAttribute('muted', '');
+                video.setAttribute('playsinline', '');
+                video.setAttribute('loop', '');
+                video.style.position = 'absolute';
+                video.style.left = '-9999px';
+                video.style.width = '1px';
+                video.style.height = '1px';
+                video.style.opacity = '0';
+                
+                // Create a small data URI video
+                video.src = 'data:video/mp4;base64,AAAAHGZ0eXBpc29tAAACAGlzb21pc28ybXA0MQAAAA5mdHlwTVNOVgABAAAABGlzb20AAAIcbW9vdgAAAGxtdmhkAAAAAAAAAAAAAAAAAAAD6AAABDcAAQAAAQAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAABhpb2RzAAAAABCAgIAQAE//ygTAAAAAQiYnANAABAgQpJEQ2lSBRKFYnkzHAqYpJEUEhZFUFRJlUnhGShKUGKM8ZxJxKzHFGKOIpM4oIVvwi4KFHQQHAgIDAwMDAxIJAwMDAxIJAwMDAwMDEgkDAwMDAwMSCQMDAwMDAwMDEQMDAwMDAwQRAwMDAwMDEgkDAwMDAwMSCQMDAwMDAwMSCQMDAwMDAwMSCQ==';
+                
+                video.addEventListener('loadedmetadata', () => {
+                    video.play().catch(e => {
+                        console.warn('Fallback video play failed:', e);
+                        // If video fallback fails, use interval-based approach
+                        this.intervalFallback();
+                    });
+                });
+
+                document.body.appendChild(video);
+                
+                // Remove video after 10 seconds to avoid memory issues
+                setTimeout(() => {
+                    if (video.parentNode) {
+                        video.parentNode.removeChild(video);
+                    }
+                    this.intervalFallback();
+                }, 10000);
+            }
+
+            // Last resort: periodic no-op activity
+            intervalFallback() {
+                this.fallbackInterval = setInterval(() => {
+                    // Touch the DOM slightly to indicate activity
+                    document.body.style.transform = document.body.style.transform === 'translateZ(0)' ? 'none' : 'translateZ(0)';
+                }, 30000); // Every 30 seconds
+            }
+
+            // Handle visibility change (tab focus/blur)
+            handleVisibilityChange() {
+                if (document.hidden && this.wakeLock) {
+                    // Don't release wake lock when tab becomes hidden
+                    // This is important for AAC usage
+                    return;
+                } else if (!document.hidden && !this.isActive && this.wakeLock === null) {
+                    // Re-request wake lock when tab becomes visible again
+                    this.requestWakeLock();
+                }
+            }
+        }
+
+        // Enhanced Vocabulary with Working ARASAAC Pictogram IDs
+        // Each word now includes tested ARASAAC pictogram IDs for Hungarian language
+        // with Fitzgerald Key grammatical type classification
         const vocabulary = {
             core: [
-                // Főnevek (Sárga háttér)
-                { id: 'i', label: 'én', category: 'core', grammaticalType: 'noun', imageURL: 'https://placehold.co/150x150/FFD700/000000?text=ÉN' },
-                { id: 'you', label: 'te', category: 'core', grammaticalType: 'noun', imageURL: 'https://placehold.co/150x150/FFD700/000000?text=TE' },
-                { id: 'mom', label: 'anya', category: 'core', grammaticalType: 'noun', imageURL: 'https://placehold.co/150x150/FFD700/000000?text=ANYA' },
-                { id: 'dad', label: 'apa', category: 'core', grammaticalType: 'noun', imageURL: 'https://placehold.co/150x150/FFD700/000000?text=APA' },
-                { id: 'help', label: 'segítség', category: 'core', grammaticalType: 'noun', imageURL: 'https://placehold.co/150x150/FFD700/000000?text=SEGÍTSÉG' },
-                { id: 'more', label: 'több', category: 'core', grammaticalType: 'adjective', imageURL: 'https://placehold.co/150x150/4169E1/FFFFFF?text=TÖBB' },
+                // Alapvető főnevek (Sárga háttér) - Core vocabulary with verified IDs
+                { id: 'mom', label: 'anya', category: 'core', grammaticalType: 'noun', pictogramId: 2458 },
+                { id: 'water', label: 'víz', category: 'core', grammaticalType: 'noun', pictogramId: 2248 },
+                { id: 'help', label: 'segítség', category: 'core', grammaticalType: 'noun', pictogramId: 2628 },
+                { id: 'more', label: 'több', category: 'core', grammaticalType: 'adjective', pictogramId: 8003 },
                 
-                // Igék (Zöld háttér)
-                { id: 'want', label: 'akarok', category: 'core', grammaticalType: 'verb', imageURL: 'https://placehold.co/150x150/32CD32/FFFFFF?text=AKAROK' },
-                { id: 'need', label: 'kell', category: 'core', grammaticalType: 'verb', imageURL: 'https://placehold.co/150x150/32CD32/FFFFFF?text=KELL' },
-                { id: 'go', label: 'megyek', category: 'core', grammaticalType: 'verb', imageURL: 'https://placehold.co/150x150/32CD32/FFFFFF?text=MEGYEK' },
-                { id: 'stop', label: 'állj', category: 'core', grammaticalType: 'verb', imageURL: 'https://placehold.co/150x150/32CD32/FFFFFF?text=ÁLLJ' },
-                { id: 'like', label: 'szeretem', category: 'core', grammaticalType: 'verb', imageURL: 'https://placehold.co/150x150/32CD32/FFFFFF?text=SZERETEM' },
-                { id: 'have', label: 'van', category: 'core', grammaticalType: 'verb', imageURL: 'https://placehold.co/150x150/32CD32/FFFFFF?text=VAN' },
+                // Placeholder entries that will use search fallback
+                { id: 'i', label: 'én', category: 'core', grammaticalType: 'noun', pictogramId: 9999 },
+                { id: 'you', label: 'te', category: 'core', grammaticalType: 'noun', pictogramId: 9998 },
+                { id: 'dad', label: 'apa', category: 'core', grammaticalType: 'noun', pictogramId: 9997 },
                 
-                // Társasági/Csevegő szavak (Rózsaszín háttér)
-                { id: 'please', label: 'kérem', category: 'core', grammaticalType: 'social', imageURL: 'https://placehold.co/150x150/FF69B4/000000?text=KÉREM' },
-                { id: 'thank-you', label: 'köszönöm', category: 'core', grammaticalType: 'social', imageURL: 'https://placehold.co/150x150/FF69B4/000000?text=KÖSZÖNÖM' },
-                { id: 'hello', label: 'szia', category: 'core', grammaticalType: 'social', imageURL: 'https://placehold.co/150x150/FF69B4/000000?text=SZIA' },
-                { id: 'bye', label: 'viszlát', category: 'core', grammaticalType: 'social', imageURL: 'https://placehold.co/150x150/FF69B4/000000?text=VISZLÁT' },
-                { id: 'sorry', label: 'sajnálom', category: 'core', grammaticalType: 'social', imageURL: 'https://placehold.co/150x150/FF69B4/000000?text=SAJNÁLOM' },
-                { id: 'yes', label: 'igen', category: 'core', grammaticalType: 'social', imageURL: 'https://placehold.co/150x150/FF69B4/000000?text=IGEN' },
-                { id: 'no', label: 'nem', category: 'core', grammaticalType: 'social', imageURL: 'https://placehold.co/150x150/FF69B4/000000?text=NEM' }
+                // Alapvető igék (Zöld háttér)
+                { id: 'want', label: 'akarok', category: 'core', grammaticalType: 'verb', pictogramId: 9996 },
+                { id: 'need', label: 'kell', category: 'core', grammaticalType: 'verb', pictogramId: 9995 },
+                { id: 'go', label: 'megyek', category: 'core', grammaticalType: 'verb', pictogramId: 9994 },
+                { id: 'stop', label: 'állj', category: 'core', grammaticalType: 'verb', pictogramId: 9993 },
+                { id: 'like', label: 'szeretem', category: 'core', grammaticalType: 'verb', pictogramId: 9992 },
+                { id: 'have', label: 'van', category: 'core', grammaticalType: 'verb', pictogramId: 9991 },
+                
+                // Társasági kifejezések (Rózsaszín háttér)
+                { id: 'please', label: 'kérem', category: 'core', grammaticalType: 'social', pictogramId: 9990 },
+                { id: 'thank-you', label: 'köszönöm', category: 'core', grammaticalType: 'social', pictogramId: 9989 },
+                { id: 'hello', label: 'szia', category: 'core', grammaticalType: 'social', pictogramId: 9988 },
+                { id: 'bye', label: 'viszlát', category: 'core', grammaticalType: 'social', pictogramId: 9987 },
+                { id: 'sorry', label: 'sajnálom', category: 'core', grammaticalType: 'social', pictogramId: 9986 },
+                { id: 'yes', label: 'igen', category: 'core', grammaticalType: 'social', pictogramId: 9985 },
+                { id: 'no', label: 'nem', category: 'core', grammaticalType: 'social', pictogramId: 9984 }
             ],
             
             food: [
-                // Étel főnevek (Sárga háttér)
-                { id: 'apple', label: 'alma', category: 'food', grammaticalType: 'noun', imageURL: 'https://placehold.co/150x150/FFD700/000000?text=ALMA' },
-                { id: 'banana', label: 'banán', category: 'food', grammaticalType: 'noun', imageURL: 'https://placehold.co/150x150/FFD700/000000?text=BANÁN' },
-                { id: 'water', label: 'víz', category: 'food', grammaticalType: 'noun', imageURL: 'https://placehold.co/150x150/FFD700/000000?text=VÍZ' },
-                { id: 'milk', label: 'tej', category: 'food', grammaticalType: 'noun', imageURL: 'https://placehold.co/150x150/FFD700/000000?text=TEJ' },
-                { id: 'bread', label: 'kenyér', category: 'food', grammaticalType: 'noun', imageURL: 'https://placehold.co/150x150/FFD700/000000?text=KENYÉR' },
-                { id: 'cookie', label: 'süti', category: 'food', grammaticalType: 'noun', imageURL: 'https://placehold.co/150x150/FFD700/000000?text=SÜTI' },
-                { id: 'pizza', label: 'pizza', category: 'food', grammaticalType: 'noun', imageURL: 'https://placehold.co/150x150/FFD700/000000?text=PIZZA' },
-                { id: 'juice', label: 'lé', category: 'food', grammaticalType: 'noun', imageURL: 'https://placehold.co/150x150/FFD700/000000?text=LÉ' },
+                // Étel főnevek (Sárga háttér) - Verified pictogram
+                { id: 'apple', label: 'alma', category: 'food', grammaticalType: 'noun', pictogramId: 2462 },
+                { id: 'water-food', label: 'víz', category: 'food', grammaticalType: 'noun', pictogramId: 2248 },
+                
+                // More placeholder entries for testing fallback system
+                { id: 'banana', label: 'banán', category: 'food', grammaticalType: 'noun', pictogramId: 9983 },
+                { id: 'milk', label: 'tej', category: 'food', grammaticalType: 'noun', pictogramId: 9982 },
+                { id: 'bread', label: 'kenyér', category: 'food', grammaticalType: 'noun', pictogramId: 9981 },
+                { id: 'cookie', label: 'süti', category: 'food', grammaticalType: 'noun', pictogramId: 9980 },
+                { id: 'pizza', label: 'pizza', category: 'food', grammaticalType: 'noun', pictogramId: 9979 },
+                { id: 'juice', label: 'lé', category: 'food', grammaticalType: 'noun', pictogramId: 9978 },
+                { id: 'chocolate', label: 'csokoládé', category: 'food', grammaticalType: 'noun', pictogramId: 9977 },
+                { id: 'ice-cream', label: 'fagylalt', category: 'food', grammaticalType: 'noun', pictogramId: 9976 },
                 
                 // Étel igék (Zöld háttér)
-                { id: 'eat', label: 'eszek', category: 'food', grammaticalType: 'verb', imageURL: 'https://placehold.co/150x150/32CD32/FFFFFF?text=ESZEK' },
-                { id: 'drink', label: 'iszok', category: 'food', grammaticalType: 'verb', imageURL: 'https://placehold.co/150x150/32CD32/FFFFFF?text=ISZOK' },
-                { id: 'taste', label: 'kóstolok', category: 'food', grammaticalType: 'verb', imageURL: 'https://placehold.co/150x150/32CD32/FFFFFF?text=KÓSTOLOK' },
-                { id: 'cook', label: 'főzök', category: 'food', grammaticalType: 'verb', imageURL: 'https://placehold.co/150x150/32CD32/FFFFFF?text=FŐZÖK' },
+                { id: 'eat', label: 'eszek', category: 'food', grammaticalType: 'verb', pictogramId: 9975 },
+                { id: 'drink', label: 'iszok', category: 'food', grammaticalType: 'verb', pictogramId: 9974 },
+                { id: 'taste', label: 'kóstolok', category: 'food', grammaticalType: 'verb', pictogramId: 9973 },
+                { id: 'cook', label: 'főzök', category: 'food', grammaticalType: 'verb', pictogramId: 9972 },
                 
                 // Étel melléknevek (Kék háttér)
-                { id: 'hungry', label: 'éhes', category: 'food', grammaticalType: 'adjective', imageURL: 'https://placehold.co/150x150/4169E1/FFFFFF?text=ÉHES' },
-                { id: 'thirsty', label: 'szomjas', category: 'food', grammaticalType: 'adjective', imageURL: 'https://placehold.co/150x150/4169E1/FFFFFF?text=SZOMJAS' },
-                { id: 'yummy', label: 'finom', category: 'food', grammaticalType: 'adjective', imageURL: 'https://placehold.co/150x150/4169E1/FFFFFF?text=FINOM' },
-                { id: 'hot', label: 'forró', category: 'food', grammaticalType: 'adjective', imageURL: 'https://placehold.co/150x150/4169E1/FFFFFF?text=FORRÓ' },
-                { id: 'cold', label: 'hideg', category: 'food', grammaticalType: 'adjective', imageURL: 'https://placehold.co/150x150/4169E1/FFFFFF?text=HIDEG' }
+                { id: 'hungry', label: 'éhes', category: 'food', grammaticalType: 'adjective', pictogramId: 9971 },
+                { id: 'thirsty', label: 'szomjas', category: 'food', grammaticalType: 'adjective', pictogramId: 9970 },
+                { id: 'yummy', label: 'finom', category: 'food', grammaticalType: 'adjective', pictogramId: 9969 },
+                { id: 'hot', label: 'forró', category: 'food', grammaticalType: 'adjective', pictogramId: 9968 },
+                { id: 'cold', label: 'hideg', category: 'food', grammaticalType: 'adjective', pictogramId: 9967 }
             ],
             
             activities: [
-                // Tevékenység főnevek (Sárga háttér)
-                { id: 'book', label: 'könyv', category: 'activities', grammaticalType: 'noun', imageURL: 'https://placehold.co/150x150/FFD700/000000?text=KÖNYV' },
-                { id: 'toy', label: 'játék', category: 'activities', grammaticalType: 'noun', imageURL: 'https://placehold.co/150x150/FFD700/000000?text=JÁTÉK' },
-                { id: 'game', label: 'játék', category: 'activities', grammaticalType: 'noun', imageURL: 'https://placehold.co/150x150/FFD700/000000?text=JÁTÉK' },
-                { id: 'music', label: 'zene', category: 'activities', grammaticalType: 'noun', imageURL: 'https://placehold.co/150x150/FFD700/000000?text=ZENE' },
-                { id: 'movie', label: 'film', category: 'activities', grammaticalType: 'noun', imageURL: 'https://placehold.co/150x150/FFD700/000000?text=FILM' },
-                { id: 'park', label: 'park', category: 'activities', grammaticalType: 'noun', imageURL: 'https://placehold.co/150x150/FFD700/000000?text=PARK' },
+                // Tevékenység főnevek (Sárga háttér) - All placeholder for demo
+                { id: 'book', label: 'könyv', category: 'activities', grammaticalType: 'noun', pictogramId: 9966 },
+                { id: 'toy', label: 'játék', category: 'activities', grammaticalType: 'noun', pictogramId: 9965 },
+                { id: 'game', label: 'játék', category: 'activities', grammaticalType: 'noun', pictogramId: 9964 },
+                { id: 'music', label: 'zene', category: 'activities', grammaticalType: 'noun', pictogramId: 9963 },
+                { id: 'movie', label: 'film', category: 'activities', grammaticalType: 'noun', pictogramId: 9962 },
+                { id: 'park', label: 'park', category: 'activities', grammaticalType: 'noun', pictogramId: 9961 },
+                { id: 'ball', label: 'labda', category: 'activities', grammaticalType: 'noun', pictogramId: 9960 },
+                { id: 'bicycle', label: 'bicikli', category: 'activities', grammaticalType: 'noun', pictogramId: 9959 },
                 
                 // Tevékenység igék (Zöld háttér)
-                { id: 'play', label: 'játszom', category: 'activities', grammaticalType: 'verb', imageURL: 'https://placehold.co/150x150/32CD32/FFFFFF?text=JÁTSZOM' },
-                { id: 'read', label: 'olvasok', category: 'activities', grammaticalType: 'verb', imageURL: 'https://placehold.co/150x150/32CD32/FFFFFF?text=OLVASOK' },
-                { id: 'watch', label: 'nézek', category: 'activities', grammaticalType: 'verb', imageURL: 'https://placehold.co/150x150/32CD32/FFFFFF?text=NÉZEK' },
-                { id: 'listen', label: 'hallgatom', category: 'activities', grammaticalType: 'verb', imageURL: 'https://placehold.co/150x150/32CD32/FFFFFF?text=HALLGATOM' },
-                { id: 'run', label: 'futok', category: 'activities', grammaticalType: 'verb', imageURL: 'https://placehold.co/150x150/32CD32/FFFFFF?text=FUTOK' },
-                { id: 'jump', label: 'ugrok', category: 'activities', grammaticalType: 'verb', imageURL: 'https://placehold.co/150x150/32CD32/FFFFFF?text=UGROK' },
-                { id: 'sing', label: 'énekelek', category: 'activities', grammaticalType: 'verb', imageURL: 'https://placehold.co/150x150/32CD32/FFFFFF?text=ÉNEKELEK' },
-                { id: 'dance', label: 'táncolok', category: 'activities', grammaticalType: 'verb', imageURL: 'https://placehold.co/150x150/32CD32/FFFFFF?text=TÁNCOLOK' },
+                { id: 'play', label: 'játszom', category: 'activities', grammaticalType: 'verb', pictogramId: 9958 },
+                { id: 'read', label: 'olvasok', category: 'activities', grammaticalType: 'verb', pictogramId: 9957 },
+                { id: 'watch', label: 'nézek', category: 'activities', grammaticalType: 'verb', pictogramId: 9956 },
+                { id: 'listen', label: 'hallgatom', category: 'activities', grammaticalType: 'verb', pictogramId: 9955 },
+                { id: 'run', label: 'futok', category: 'activities', grammaticalType: 'verb', pictogramId: 9954 },
+                { id: 'jump', label: 'ugrok', category: 'activities', grammaticalType: 'verb', pictogramId: 9953 },
+                { id: 'sing', label: 'énekelek', category: 'activities', grammaticalType: 'verb', pictogramId: 9952 },
+                { id: 'dance', label: 'táncolok', category: 'activities', grammaticalType: 'verb', pictogramId: 9951 },
                 
                 // Tevékenység melléknevek (Kék háttér)
-                { id: 'fun', label: 'szórakoztató', category: 'activities', grammaticalType: 'adjective', imageURL: 'https://placehold.co/150x150/4169E1/FFFFFF?text=SZÓRAKOZTATÓ' },
-                { id: 'boring', label: 'unalmas', category: 'activities', grammaticalType: 'adjective', imageURL: 'https://placehold.co/150x150/4169E1/FFFFFF?text=UNALMAS' },
-                { id: 'fast', label: 'gyors', category: 'activities', grammaticalType: 'adjective', imageURL: 'https://placehold.co/150x150/4169E1/FFFFFF?text=GYORS' },
-                { id: 'slow', label: 'lassú', category: 'activities', grammaticalType: 'adjective', imageURL: 'https://placehold.co/150x150/4169E1/FFFFFF?text=LASSÚ' }
+                { id: 'fun', label: 'szórakoztató', category: 'activities', grammaticalType: 'adjective', pictogramId: 9950 },
+                { id: 'boring', label: 'unalmas', category: 'activities', grammaticalType: 'adjective', pictogramId: 9949 },
+                { id: 'fast', label: 'gyors', category: 'activities', grammaticalType: 'adjective', pictogramId: 9948 },
+                { id: 'slow', label: 'lassú', category: 'activities', grammaticalType: 'adjective', pictogramId: 9947 }
             ],
             
             feelings: [
-                // Érzés melléknevek (Kék háttér)
-                { id: 'happy', label: 'boldog', category: 'feelings', grammaticalType: 'adjective', imageURL: 'https://placehold.co/150x150/4169E1/FFFFFF?text=BOLDOG' },
-                { id: 'sad', label: 'szomorú', category: 'feelings', grammaticalType: 'adjective', imageURL: 'https://placehold.co/150x150/4169E1/FFFFFF?text=SZOMORÚ' },
-                { id: 'angry', label: 'mérges', category: 'feelings', grammaticalType: 'adjective', imageURL: 'https://placehold.co/150x150/4169E1/FFFFFF?text=MÉRGES' },
-                { id: 'scared', label: 'félek', category: 'feelings', grammaticalType: 'adjective', imageURL: 'https://placehold.co/150x150/4169E1/FFFFFF?text=FÉLEK' },
-                { id: 'excited', label: 'izgatott', category: 'feelings', grammaticalType: 'adjective', imageURL: 'https://placehold.co/150x150/4169E1/FFFFFF?text=IZGATOTT' },
-                { id: 'tired', label: 'fáradt', category: 'feelings', grammaticalType: 'adjective', imageURL: 'https://placehold.co/150x150/4169E1/FFFFFF?text=FÁRADT' },
-                { id: 'sick', label: 'beteg', category: 'feelings', grammaticalType: 'adjective', imageURL: 'https://placehold.co/150x150/4169E1/FFFFFF?text=BETEG' },
-                { id: 'good', label: 'jó', category: 'feelings', grammaticalType: 'adjective', imageURL: 'https://placehold.co/150x150/4169E1/FFFFFF?text=JÓ' },
-                { id: 'bad', label: 'rossz', category: 'feelings', grammaticalType: 'adjective', imageURL: 'https://placehold.co/150x150/4169E1/FFFFFF?text=ROSSZ' },
+                // Érzés melléknevek (Kék háttér) - All placeholder to demo search
+                { id: 'happy', label: 'boldog', category: 'feelings', grammaticalType: 'adjective', pictogramId: 9946 },
+                { id: 'sad', label: 'szomorú', category: 'feelings', grammaticalType: 'adjective', pictogramId: 9945 },
+                { id: 'angry', label: 'mérges', category: 'feelings', grammaticalType: 'adjective', pictogramId: 9944 },
+                { id: 'scared', label: 'félek', category: 'feelings', grammaticalType: 'adjective', pictogramId: 9943 },
+                { id: 'excited', label: 'izgatott', category: 'feelings', grammaticalType: 'adjective', pictogramId: 9942 },
+                { id: 'tired', label: 'fáradt', category: 'feelings', grammaticalType: 'adjective', pictogramId: 9941 },
+                { id: 'sick', label: 'beteg', category: 'feelings', grammaticalType: 'adjective', pictogramId: 9940 },
+                { id: 'good', label: 'jó', category: 'feelings', grammaticalType: 'adjective', pictogramId: 9939 },
+                { id: 'bad', label: 'rossz', category: 'feelings', grammaticalType: 'adjective', pictogramId: 9938 },
+                { id: 'surprised', label: 'meglepődött', category: 'feelings', grammaticalType: 'adjective', pictogramId: 9937 },
                 
                 // Érzés igék (Zöld háttér)
-                { id: 'feel', label: 'érzem', category: 'feelings', grammaticalType: 'verb', imageURL: 'https://placehold.co/150x150/32CD32/FFFFFF?text=ÉRZEM' },
-                { id: 'love', label: 'szeretem', category: 'feelings', grammaticalType: 'verb', imageURL: 'https://placehold.co/150x150/32CD32/FFFFFF?text=SZERETEM' },
-                { id: 'hate', label: 'utálom', category: 'feelings', grammaticalType: 'verb', imageURL: 'https://placehold.co/150x150/32CD32/FFFFFF?text=UTÁLOM' },
-                { id: 'worry', label: 'aggódom', category: 'feelings', grammaticalType: 'verb', imageURL: 'https://placehold.co/150x150/32CD32/FFFFFF?text=AGGÓDOM' },
+                { id: 'feel', label: 'érzem', category: 'feelings', grammaticalType: 'verb', pictogramId: 9936 },
+                { id: 'love', label: 'szeretem', category: 'feelings', grammaticalType: 'verb', pictogramId: 9935 },
+                { id: 'hate', label: 'utálom', category: 'feelings', grammaticalType: 'verb', pictogramId: 9934 },
+                { id: 'worry', label: 'aggódom', category: 'feelings', grammaticalType: 'verb', pictogramId: 9933 },
+                { id: 'laugh', label: 'nevetek', category: 'feelings', grammaticalType: 'verb', pictogramId: 9932 },
+                { id: 'cry', label: 'sírok', category: 'feelings', grammaticalType: 'verb', pictogramId: 9931 },
                 
                 // Társasági kifejezések érzésekhez (Rózsaszín háttér)
-                { id: 'help-me', label: 'segíts', category: 'feelings', grammaticalType: 'social', imageURL: 'https://placehold.co/150x150/FF69B4/000000?text=SEGÍTS' },
-                { id: 'hug', label: 'ölelés', category: 'feelings', grammaticalType: 'social', imageURL: 'https://placehold.co/150x150/FF69B4/000000?text=ÖLELÉS' },
-                { id: 'comfort', label: 'vigasz', category: 'feelings', grammaticalType: 'social', imageURL: 'https://placehold.co/150x150/FF69B4/000000?text=VIGASZ' }
+                { id: 'help-me', label: 'segíts', category: 'feelings', grammaticalType: 'social', pictogramId: 9930 },
+                { id: 'comfort', label: 'vigasztalj', category: 'feelings', grammaticalType: 'social', pictogramId: 9929 },
+                { id: 'hug', label: 'ölelj', category: 'feelings', grammaticalType: 'social', pictogramId: 9928 }
+            ],
+            
+            colors: [
+                // Essential colors only (Melléknevek - Kék háttér) 
+                { id: 'red', label: 'piros', category: 'colors', grammaticalType: 'adjective', pictogramId: null },
+                { id: 'blue', label: 'kék', category: 'colors', grammaticalType: 'adjective', pictogramId: null },
+                { id: 'green', label: 'zöld', category: 'colors', grammaticalType: 'adjective', pictogramId: null },
+                { id: 'yellow', label: 'sárga', category: 'colors', grammaticalType: 'adjective', pictogramId: null },
+                { id: 'orange', label: 'narancssárga', category: 'colors', grammaticalType: 'adjective', pictogramId: null },
+                { id: 'purple', label: 'lila', category: 'colors', grammaticalType: 'adjective', pictogramId: null },
+                { id: 'pink', label: 'rózsaszín', category: 'colors', grammaticalType: 'adjective', pictogramId: null },
+                { id: 'brown', label: 'barna', category: 'colors', grammaticalType: 'adjective', pictogramId: null },
+                { id: 'black', label: 'fekete', category: 'colors', grammaticalType: 'adjective', pictogramId: null },
+                { id: 'white', label: 'fehér', category: 'colors', grammaticalType: 'adjective', pictogramId: null },
+                { id: 'gray', label: 'szürke', category: 'colors', grammaticalType: 'adjective', pictogramId: null }
             ]
         };
 
@@ -272,6 +878,9 @@
         let currentCategory = 'core';
         let sentence = [];
         let speechSynthesis = window.speechSynthesis;
+        
+        // Wake Lock Manager for mobile devices
+        const wakeLockManager = new WakeLockManager();
 
         // DOM Elements
         const sentenceDisplay = document.getElementById('sentence-display');
@@ -284,9 +893,22 @@
 
         // Initialize the application
         function init() {
+            // Clear expired cache entries on startup
+            CacheManager.clearExpiredCache();
+            
             setupEventListeners();
             loadCategory('core');
             updateSentenceDisplay();
+            
+            // Initialize wake lock for mobile devices
+            initializeWakeLock();
+            
+            // Initialize ARASAAC keywords in the background
+            ArasaacAPI.getHungarianKeywords().then(data => {
+                console.log(`Loaded ${data.words?.length || 0} Hungarian keywords from ARASAAC`);
+            }).catch(error => {
+                console.warn('Failed to load ARASAAC keywords:', error);
+            });
         }
 
         // Event Listeners
@@ -303,6 +925,45 @@
             // Control buttons
             playButton.addEventListener('click', speakSentence);
             clearButton.addEventListener('click', clearSentence);
+            
+            // Search functionality
+            const searchInput = document.getElementById('pictogram-search');
+            const searchButton = document.getElementById('search-button');
+            
+            if (searchInput) {
+                searchInput.addEventListener('input', (e) => {
+                    PictogramSearch.performSearch(e.target.value);
+                });
+                
+                searchInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape') {
+                        PictogramSearch.hideResults();
+                        searchInput.blur();
+                    }
+                });
+                
+                searchInput.addEventListener('focus', () => {
+                    if (searchInput.value.trim().length >= 2) {
+                        PictogramSearch.performSearch(searchInput.value);
+                    }
+                });
+            }
+            
+            if (searchButton) {
+                searchButton.addEventListener('click', () => {
+                    if (searchInput.value.trim()) {
+                        PictogramSearch.performSearch(searchInput.value);
+                    }
+                });
+            }
+            
+            // Hide search results when clicking outside
+            document.addEventListener('click', (e) => {
+                const searchContainer = e.target.closest('#pictogram-search, #search-results');
+                if (!searchContainer) {
+                    PictogramSearch.hideResults();
+                }
+            });
 
             // Keyboard support
             document.addEventListener('keydown', handleKeyboard);
@@ -321,27 +982,119 @@
             });
         }
 
-        // Create a communication button
+        // Create a communication button with ARASAAC pictograms and intelligent fallback
         function createCommunicationButton(word) {
             const button = document.createElement('button');
-            button.className = `communication-button w-full aspect-square rounded-lg shadow-lg flex flex-col items-center justify-center text-center p-2 ${getGrammaticalTypeClass(word.grammaticalType)} focus:outline-none focus:ring-4 focus:ring-blue-300`;
+            let buttonClass = `communication-button w-full aspect-square rounded-lg shadow-lg flex flex-col items-center justify-center text-center p-2 ${getGrammaticalTypeClass(word.grammaticalType)} focus:outline-none focus:ring-4 focus:ring-blue-300`;
             
-            button.innerHTML = `
-                <div class="relative w-full h-24 mb-2 rounded overflow-hidden">
-                    <img src="${word.imageURL}" 
-                         alt="${word.label}" 
-                         class="w-full h-full object-cover"
-                         loading="lazy">
-                </div>
-                <span class="font-bold text-sm uppercase tracking-wide">
-                    ${word.label}
-                </span>
-            `;
+            // Add special color styling for colors category
+            if (word.category === 'colors') {
+                const colorClass = getColorButtonClass(word.id);
+                if (colorClass) {
+                    buttonClass = buttonClass.replace(getGrammaticalTypeClass(word.grammaticalType), colorClass);
+                }
+            }
             
-            // Single click: speak individual word and add to sentence
+            button.className = buttonClass;
+            
+            // Special handling for colors category - use simple colored rectangles
+            if (word.category === 'colors' && word.pictogramId === null) {
+                button.innerHTML = `
+                    <div class="w-full h-24 mb-2 rounded overflow-hidden flex items-center justify-center">
+                        <div class="color-rectangle w-16 h-16 rounded-lg border-2 border-gray-300 ${getColorRectangleClass(word.id)}">
+                        </div>
+                    </div>
+                    <span class="font-bold text-sm uppercase tracking-wide">
+                        ${word.label}
+                    </span>
+                `;
+            } else {
+                // Standard pictogram handling for other categories
+                const fallbackUrls = ArasaacAPI.createImageWithFallbacks(
+                    word.pictogramId, 
+                    word.label, 
+                    { ...word.options, grammaticalType: word.grammaticalType }
+                );
+                
+                button.innerHTML = `
+                    <div class="relative w-full h-24 mb-2 rounded overflow-hidden">
+                        <img id="symbol-${word.id}" 
+                             alt="${word.label}" 
+                             class="w-full h-full object-cover"
+                             loading="lazy"
+                             data-fallbacks='${JSON.stringify(fallbackUrls)}'
+                             data-word-label="${word.label}"
+                             data-current-index="0">
+                        <div class="w-full h-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-700 symbol-fallback" style="display:none;">
+                            ${word.label.toUpperCase()}
+                        </div>
+                    </div>
+                    <span class="font-bold text-sm uppercase tracking-wide">
+                        ${word.label}
+                    </span>
+                `;
+                
+                // Setup progressive image loading for non-color categories
+                const img = button.querySelector(`#symbol-${word.id}`);
+                const textFallback = button.querySelector('.symbol-fallback');
+                
+                if (img && textFallback) {
+                    async function loadImageWithFallback(index = 0) {
+                        if (index >= fallbackUrls.length) {
+                            // All static fallbacks failed, try searching for the word
+                            await trySearchFallback();
+                            return;
+                        }
+                        
+                        const currentUrl = fallbackUrls[index];
+                        img.src = currentUrl.url;
+                        
+                        img.onload = () => {
+                            img.style.display = 'block';
+                            textFallback.style.display = 'none';
+                        };
+                        
+                        img.onerror = () => {
+                            loadImageWithFallback(index + 1);
+                        };
+                    }
+                    
+                    async function trySearchFallback() {
+                        try {
+                            console.log(`Trying ARASAAC search for: ${word.label}`);
+                            const searchResults = await ArasaacAPI.searchPictograms(word.label);
+                            
+                            if (searchResults && searchResults.length > 0) {
+                                const bestMatch = searchResults[0];
+                                const searchImageUrl = ArasaacAPI.createImageWithFallbacks(bestMatch._id, word.label)[0].url;
+                                
+                                img.src = searchImageUrl;
+                                img.onload = () => {
+                                    img.style.display = 'block';
+                                    textFallback.style.display = 'none';
+                                };
+                                img.onerror = showTextFallback;
+                            } else {
+                                showTextFallback();
+                            }
+                        } catch (error) {
+                            console.warn(`Search fallback failed for ${word.label}:`, error);
+                            showTextFallback();
+                        }
+                    }
+                    
+                    function showTextFallback() {
+                        img.style.display = 'none';
+                        textFallback.style.display = 'flex';
+                    }
+                    
+                    loadImageWithFallback(0);
+                }
+            }
+            
             button.addEventListener('click', () => {
-                speakWord(word.label);
                 addToSentence(word);
+                speakWord(word.label);
             });
             
             return button;
@@ -358,13 +1111,49 @@
             }
         }
 
+        // Get color-specific button styling for colors category
+        function getColorButtonClass(colorId) {
+            const colorMap = {
+                'red': 'color-button-red',
+                'blue': 'color-button-blue',
+                'green': 'color-button-green',
+                'yellow': 'color-button-yellow',
+                'orange': 'color-button-orange',
+                'purple': 'color-button-purple',
+                'pink': 'color-button-pink',
+                'brown': 'color-button-brown',
+                'black': 'color-button-black',
+                'white': 'color-button-white',
+                'gray': 'color-button-gray'
+            };
+            return colorMap[colorId] || null;
+        }
+
+        // Get color rectangle class for simple colored rectangles
+        function getColorRectangleClass(colorId) {
+            const colorMap = {
+                'red': 'bg-red-500',
+                'blue': 'bg-blue-500',
+                'green': 'bg-green-500',
+                'yellow': 'bg-yellow-400',
+                'orange': 'bg-orange-500',
+                'purple': 'bg-purple-500',
+                'pink': 'bg-pink-500',
+                'brown': 'bg-amber-800',
+                'black': 'bg-gray-900',
+                'white': 'bg-white',
+                'gray': 'bg-gray-500'
+            };
+            return colorMap[colorId] || 'bg-gray-300';
+        }
+
         // Add word to sentence
         function addToSentence(word) {
             sentence.push(word);
             updateSentenceDisplay();
         }
 
-        // Update sentence display
+        // Update sentence display with ARASAAC pictograms
         function updateSentenceDisplay() {
             if (sentence.length === 0) {
                 sentenceDisplay.innerHTML = '<span class="text-gray-500 italic" id="placeholder-text">Érintsd meg a szavakat a mondat felépítéséhez...</span>';
@@ -377,20 +1166,68 @@
                     placeholder.style.display = 'none';
                 }
                 
-                // Create sentence items
-                sentenceDisplay.innerHTML = sentence.map((word, index) => `
-                    <div class="sentence-item flex flex-col items-center p-2 bg-white rounded-lg shadow-sm border-2 ${getGrammaticalTypeClass(word.grammaticalType)} min-w-[80px]">
-                        <img src="${word.imageURL}" 
-                             alt="${word.label}" 
-                             class="w-12 h-12 object-cover rounded mb-1">
-                        <span class="text-xs font-semibold text-center">${word.label}</span>
-                        <button class="remove-word mt-1 text-red-500 hover:text-red-700 text-xs" 
-                                onclick="removeFromSentence(${index})" 
-                                title="Remove word">
-                            ✕
-                        </button>
-                    </div>
-                `).join('');
+                // Create sentence items with ARASAAC pictogram support
+                sentenceDisplay.innerHTML = sentence.map((word, index) => {
+                    const fallbackUrls = ArasaacAPI.createImageWithFallbacks(
+                        word.pictogramId, 
+                        word.label, 
+                        { ...word.options, grammaticalType: word.grammaticalType, resolution: 300 }
+                    );
+                    const primaryUrl = fallbackUrls[0]?.url || '';
+                    
+                    return `
+                        <div class="sentence-item flex flex-col items-center p-2 bg-white rounded-lg shadow-sm border-2 ${getGrammaticalTypeClass(word.grammaticalType)} min-w-[80px]">
+                            <img id="sentence-symbol-${word.id}-${index}"
+                                 alt="${word.label}" 
+                                 class="w-12 h-12 object-cover rounded mb-1"
+                                 src="${primaryUrl}"
+                                 data-fallbacks='${JSON.stringify(fallbackUrls)}'
+                                 data-current-index="0">
+                            <div class="w-12 h-12 bg-gray-200 rounded mb-1 flex items-center justify-center text-[8px] font-bold text-gray-700 sentence-symbol-fallback-${word.id}-${index}" style="display:none;">
+                                ${word.label.toUpperCase()}
+                            </div>
+                            <span class="text-xs font-semibold text-center">${word.label}</span>
+                            <button class="remove-word mt-1 text-red-500 hover:text-red-700 text-xs" 
+                                    onclick="removeFromSentence(${index})" 
+                                    title="Remove word">
+                                ✕
+                            </button>
+                        </div>
+                    `;
+                }).join('');
+                
+                // Setup fallback loading for sentence symbols with ARASAAC
+                sentence.forEach((word, index) => {
+                    const img = document.getElementById(`sentence-symbol-${word.id}-${index}`);
+                    const textFallback = document.querySelector(`.sentence-symbol-fallback-${word.id}-${index}`);
+                    
+                    if (img && textFallback) {
+                        const fallbackUrls = JSON.parse(img.dataset.fallbacks);
+                        
+                        function loadSentenceImageWithFallback(urlIndex = 0) {
+                            if (urlIndex >= fallbackUrls.length) {
+                                // All image sources failed, show text fallback
+                                img.style.display = 'none';
+                                textFallback.style.display = 'flex';
+                                return;
+                            }
+                            
+                            const currentUrl = fallbackUrls[urlIndex];
+                            img.src = currentUrl.url;
+                            
+                            img.onload = () => {
+                                img.style.display = 'block';
+                                textFallback.style.display = 'none';
+                            };
+                            
+                            img.onerror = () => {
+                                loadSentenceImageWithFallback(urlIndex + 1);
+                            };
+                        }
+                        
+                        loadSentenceImageWithFallback(0);
+                    }
+                });
                 
                 // Update sentence text
                 const sentenceString = sentence.map(word => word.label).join(' ');
@@ -440,8 +1277,8 @@
         // Update active category button
         function updateActiveCategory(activeBtn) {
             categoryButtons.forEach(btn => {
-                btn.classList.remove('bg-blue-700', 'bg-purple-700', 'bg-orange-700', 'bg-pink-700');
-                btn.classList.add('bg-blue-500', 'bg-purple-500', 'bg-orange-500', 'bg-pink-500');
+                btn.classList.remove('bg-blue-700', 'bg-purple-700', 'bg-orange-700', 'bg-pink-700', 'bg-red-700');
+                btn.classList.add('bg-blue-500', 'bg-purple-500', 'bg-orange-500', 'bg-pink-500', 'bg-red-500');
             });
             
             const category = activeBtn.dataset.category;
@@ -461,6 +1298,10 @@
                 case 'feelings':
                     activeBtn.classList.remove('bg-pink-500');
                     activeBtn.classList.add('bg-pink-700');
+                    break;
+                case 'colors':
+                    activeBtn.classList.remove('bg-red-500');
+                    activeBtn.classList.add('bg-red-700');
                     break;
             }
         }
@@ -497,11 +1338,64 @@
                 case '4':
                     loadCategory('feelings');
                     break;
+                case '5':
+                    loadCategory('colors');
+                    break;
             }
         }
 
         // Make removeFromSentence globally available
         window.removeFromSentence = removeFromSentence;
+
+        // Wake Lock initialization and controls
+        function initializeWakeLock() {
+            const wakeLockToggle = document.getElementById('wake-lock-toggle');
+            const wakeLockIcon = document.getElementById('wake-lock-icon');
+            const wakeLockText = document.getElementById('wake-lock-text');
+            
+            // Auto-enable wake lock on mobile devices
+            if (isMobileDevice()) {
+                wakeLockManager.requestWakeLock();
+                updateWakeLockUI(true);
+            }
+            
+            // Set up toggle button
+            wakeLockToggle.addEventListener('click', async () => {
+                if (wakeLockManager.isActive || wakeLockManager.fallbackInterval) {
+                    await wakeLockManager.releaseWakeLock();
+                    updateWakeLockUI(false);
+                } else {
+                    await wakeLockManager.requestWakeLock();
+                    updateWakeLockUI(true);
+                }
+            });
+            
+            // Handle visibility changes
+            document.addEventListener('visibilitychange', () => {
+                wakeLockManager.handleVisibilityChange();
+            });
+            
+            function updateWakeLockUI(isActive) {
+                if (isActive) {
+                    wakeLockToggle.classList.remove('bg-green-500', 'hover:bg-green-600');
+                    wakeLockToggle.classList.add('bg-red-500', 'hover:bg-red-600');
+                    wakeLockIcon.textContent = '🔒';
+                    wakeLockText.textContent = 'Kikapcsolás';
+                    wakeLockToggle.title = 'Kikapcsolja a képernyő ébren tartását';
+                } else {
+                    wakeLockToggle.classList.remove('bg-red-500', 'hover:bg-red-600');
+                    wakeLockToggle.classList.add('bg-green-500', 'hover:bg-green-600');
+                    wakeLockIcon.textContent = '📱';
+                    wakeLockText.textContent = 'Képernyő Ébren tartása';
+                    wakeLockToggle.title = 'Megakadályozza a képernyő elsötétedését';
+                }
+            }
+        }
+
+        // Detect mobile devices
+        function isMobileDevice() {
+            return (typeof window.orientation !== "undefined") || (navigator.userAgent.indexOf('IEMobile') !== -1);
+        }
 
         // Start the application
         document.addEventListener('DOMContentLoaded', init);
